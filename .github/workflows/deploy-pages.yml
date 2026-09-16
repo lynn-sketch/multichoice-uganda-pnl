@@ -31,9 +31,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        env:
-          GITHUB_PAGES: 'true'
-        run: npm run build
+        run: npx tsc -b && npx vite build --base=/multichoice-uganda-pnl/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
