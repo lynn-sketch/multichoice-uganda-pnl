@@ -49,13 +49,18 @@
     background: white !important;
   }
 
-  .print\:hidden {
+  .print\:hidden,
+  .export-hide {
     display: none !important;
   }
 
   main {
     padding: 0 !important;
   }
+}
+
+.exporting .export-hide {
+  display: none !important;
 }
 
 @media (max-width: 1024px) {

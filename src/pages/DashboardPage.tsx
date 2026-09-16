@@ -24,8 +24,18 @@ import { chartColors } from '../theme/tokens';
 import { formatUGXCompact } from '../lib/format';
 
 export function DashboardPage() {
-  const { result, insights, refreshing, setBrandFilter, presentationMode } = useScenario();
+  const {
+    result,
+    insights,
+    refreshing,
+    setBrandFilter,
+    presentationMode,
+    periods,
+    selectedPeriodId,
+  } = useScenario();
   const analytics = buildExecutiveAnalytics(result);
+  const periodLabel =
+    periods.find((p) => p.id === selectedPeriodId)?.label ?? 'August 2026';
 
   if (refreshing) return <LoadingState message="Calculating P&L..." />;
 
@@ -43,7 +53,7 @@ export function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title="Executive Dashboard"
-        subtitle="August 2026 Sales P&L overview driven by the central calculation engine."
+        subtitle={`${periodLabel} Sales P&L overview driven by the central calculation engine.`}
       />
 
       <KPIGrid>
@@ -66,7 +76,16 @@ export function DashboardPage() {
       {presentationMode && <InsightGrid insights={insights.slice(0, 3)} />}
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <ChartCard title="Revenue Composition" subtitle="Hardware vs Subscription" badge="Output">
+        <ChartCard
+          title="Revenue Composition"
+          subtitle="Hardware vs Subscription"
+          badge="Output"
+          periodLabel={periodLabel}
+          exportData={[
+            ['Segment', 'Revenue'],
+            ...analytics.revenueComposition.map((r) => [r.name, r.value]),
+          ]}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie data={analytics.revenueComposition} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}
@@ -84,7 +103,16 @@ export function DashboardPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Revenue by Brand" subtitle="DStv vs GOtv hardware and package revenue" badge="Observed / Calculated">
+        <ChartCard
+          title="Revenue by Brand"
+          subtitle="DStv vs GOtv hardware and package revenue"
+          badge="Observed / Calculated"
+          periodLabel={periodLabel}
+          exportData={[
+            ['Brand Item', 'Revenue'],
+            ...analytics.brandRevenue.map((r) => [r.name, r.value]),
+          ]}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={analytics.brandRevenue}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -102,7 +130,16 @@ export function DashboardPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Revenue by Package" subtitle="Top packages by classified revenue" badge="Source Data">
+        <ChartCard
+          title="Revenue by Package"
+          subtitle="Top packages by classified revenue"
+          badge="Source Data"
+          periodLabel={periodLabel}
+          exportData={[
+            ['Package', 'Revenue', 'Brand'],
+            ...packageRevenue.map((r) => [r.name, r.value, r.brand]),
+          ]}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={packageRevenue} layout="vertical" margin={{ left: 24 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -114,7 +151,16 @@ export function DashboardPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Cost Breakdown" subtitle="Base cost components" badge="Output">
+        <ChartCard
+          title="Cost Breakdown"
+          subtitle="Base cost components"
+          badge="Output"
+          periodLabel={periodLabel}
+          exportData={[
+            ['Cost Category', 'Amount'],
+            ...analytics.costBreakdown.map((r) => [r.name, r.value]),
+          ]}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={analytics.costBreakdown} layout="vertical" margin={{ left: 16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -126,11 +172,30 @@ export function DashboardPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Profit Bridge" subtitle="Revenue to profit after incentive" badge="Output" heightClass="h-72">
+        <ChartCard
+          title="Profit Bridge"
+          subtitle="Revenue to profit after incentive"
+          badge="Output"
+          heightClass="h-72"
+          periodLabel={periodLabel}
+          exportData={[
+            ['Step', 'Value'],
+            ...buildWaterfall(result).map((r) => [r.name, r.value]),
+          ]}
+        >
           <WaterfallChart items={buildWaterfall(result)} />
         </ChartCard>
 
-        <ChartCard title="Base Case vs Incentive Scenario" subtitle="Profit and costs comparison" badge="Output">
+        <ChartCard
+          title="Base Case vs Incentive Scenario"
+          subtitle="Profit and costs comparison"
+          badge="Output"
+          periodLabel={periodLabel}
+          exportData={[
+            ['Metric', 'Base', 'After Incentive'],
+            ...baseVsIncentive.map((r) => [r.metric, r.Base, r['After Incentive']]),
+          ]}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={baseVsIncentive}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />

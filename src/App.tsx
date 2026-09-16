@@ -1,9 +1,21 @@
-import { useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { Header } from './components/Header';
+import type { ExportAction } from './components/ExportMenu';
 import { Sidebar } from './components/Sidebar';
 import { ScenarioProvider, useScenario } from './context/ScenarioContext';
-import { downloadCsv, formatPercent, formatUGX } from './lib/format';
-import { PERIOD_LABEL } from './data/august2026';
+import { formatPercent, formatUGX } from './lib/format';
+import {
+  exportCurrentScenarioExcel,
+  exportElementPdf,
+  exportElementPng,
+  exportFilename,
+  exportFullAnalysisExcel,
+  exportPnLExcel,
+  exportTableExcel,
+  type ExportContext,
+} from './lib/exportService';
+import { PERIOD_LABEL, subscriptionPackages } from './data/august2026';
+import { filterPackages, filterPartners, packageAnalytics } from './services/analyticsService';
 import { AnomaliesPage } from './pages/AnomaliesPage';
 import { AssumptionsPage } from './pages/AssumptionsPage';
 import { CostsPage } from './pages/CostsPage';
@@ -29,7 +41,9 @@ function AppShell() {
     page,
     setPage,
     result,
+    baseResult,
     assumptions,
+    filters,
     resetAssumptions,
     saveScenario,
     presentationMode,
@@ -47,46 +61,86 @@ function AppShell() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [scenarioName, setScenarioName] = useState('Base Case');
+  const [exportBusy, setExportBusy] = useState(false);
 
   const periodLabel =
     periods.find((p) => p.id === selectedPeriodId)?.label ?? PERIOD_LABEL;
 
-  const handleExport = () => {
-    downloadCsv(`multichoice-uganda-pnl-scenario-${Date.now()}.csv`, [
-      ['Metric', 'Value'],
-      ['Period', periodLabel],
-      ['Company', 'MultiChoice Uganda'],
-      ['DStv Hardware Value', assumptions.dstvHardwareValue],
-      ['GOtv Hardware Value', assumptions.gotvHardwareValue],
-      ['Hardware Commission per Unit', assumptions.hardwareCommissionPerUnit],
-      ['Mega Dealer Subscription Commission', assumptions.megaDealerSubscriptionCommission],
-      ['POS Subscription Commission', assumptions.posSubscriptionCommission],
-      ['Performance Sales Target', assumptions.performanceSalesTarget],
-      ['Performance Incentive Rate', assumptions.performanceIncentiveRate],
-      ['New POS Target Rate', assumptions.newPosTargetRate],
-      ['New POS Incentive', assumptions.newPosIncentive],
-      ['Stock Collection Fee per Unit', assumptions.stockCollectionFeePerUnit],
-      ['Mega Dealer Renewable Incentive', assumptions.megaDealerRenewableIncentive],
-      ['Revenue Uplift', assumptions.revenueUpliftFromMegaDealer],
-      ['Total Revenue', result.baseRevenue],
-      ['Scenario Revenue', result.scenarioRevenue],
-      ['Hardware Commission', result.hardwareCommission],
-      ['Subscription Commission', result.subscriptionCommission],
-      ['Performance Incentive', result.performanceIncentive],
-      ['New POS Incentive Cost', result.newPosIncentiveCost],
-      ['Stock Collection Fee', result.stockCollectionFee],
-      ['Total Base Costs', result.totalBaseCosts],
-      ['Base Profit', result.baseProfit],
-      ['Base Profit Margin', result.baseProfitMargin],
-      ['Total Costs With Incentive', result.totalCostsWithIncentive],
-      ['Profit After Incentive', result.profitAfterIncentive],
-      ['Profit Margin After Incentive', result.profitMarginAfterIncentive],
-      ['Break-even Uplift %', result.breakEvenUpliftPercentage],
-    ]);
-  };
+  const buildExportContext = useCallback((): ExportContext => {
+    return {
+      periodLabel,
+      assumptions,
+      result,
+      baseResult,
+      filters,
+      packages: subscriptionPackages,
+      scenarioLabel: 'Current live assumptions',
+    };
+  }, [periodLabel, assumptions, result, baseResult, filters]);
+
+  const handleExportAction = useCallback(
+    async (action: ExportAction) => {
+      const ctx = buildExportContext();
+      setExportBusy(true);
+      try {
+        if (action === 'pnl-xlsx') {
+          exportPnLExcel(ctx);
+          return;
+        }
+        if (action === 'full-xlsx') {
+          exportFullAnalysisExcel(ctx);
+          return;
+        }
+        if (action === 'scenario') {
+          exportCurrentScenarioExcel(ctx);
+          return;
+        }
+        if (action === 'table') {
+          const { rows, sheetName } = buildCurrentTable(page, ctx);
+          exportTableExcel(
+            exportFilename(`${sheetName.replace(/\s+/g, '_')}_Table`, periodLabel, 'xlsx'),
+            sheetName,
+            rows,
+          );
+          return;
+        }
+        if (action === 'pdf' || action === 'png') {
+          const target =
+            (document.getElementById('export-capture-root') as HTMLElement | null) ??
+            document.body;
+          const wasPresenting = presentationMode;
+          document.documentElement.classList.add('exporting');
+          if (!wasPresenting) setPresentationMode(true);
+          await new Promise((r) => setTimeout(r, 350));
+          try {
+            if (action === 'pdf') {
+              await exportElementPdf(
+                target,
+                exportFilename('Dashboard', periodLabel, 'pdf'),
+              );
+            } else {
+              await exportElementPng(
+                target,
+                exportFilename('Dashboard', periodLabel, 'png'),
+              );
+            }
+          } finally {
+            document.documentElement.classList.remove('exporting');
+            if (!wasPresenting) setPresentationMode(false);
+          }
+        }
+      } finally {
+        setExportBusy(false);
+      }
+    },
+    [buildExportContext, page, periodLabel, presentationMode, setPresentationMode],
+  );
 
   return (
-    <div className={`flex min-h-screen bg-dashboard ${presentationMode ? 'presentation-mode' : ''}`}>
+    <div
+      id="export-capture-root"
+      className={`flex min-h-screen bg-dashboard ${presentationMode ? 'presentation-mode' : ''}`}
+    >
       <Sidebar
         page={page}
         onNavigate={setPage}
@@ -101,7 +155,8 @@ function AppShell() {
           onMenu={() => setSidebarOpen(true)}
           onReset={() => setShowResetConfirm(true)}
           onSave={() => setShowSaveModal(true)}
-          onExport={handleExport}
+          onExportAction={handleExportAction}
+          exportBusy={exportBusy}
           onRefresh={refresh}
           onTogglePresentation={() => setPresentationMode(!presentationMode)}
           presentationMode={presentationMode}
@@ -116,7 +171,7 @@ function AppShell() {
         <main className="flex-1 px-4 py-5 sm:px-6 print:px-0">
           <PageRouter page={page} />
           {!presentationMode && (
-            <footer className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-400 print:mt-4">
+            <footer className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-400 print:mt-4 export-hide">
               MultiChoice Uganda · {periodLabel} Sales Analytics & P&L Intelligence ·{' '}
               {formatUGX(result.baseRevenue)} total revenue · Margin after incentive{' '}
               {formatPercent(result.profitMarginAfterIncentive)}
@@ -172,6 +227,99 @@ function AppShell() {
       )}
     </div>
   );
+}
+
+function buildCurrentTable(
+  page: PageId,
+  ctx: ExportContext,
+): { sheetName: string; rows: (string | number)[][] } {
+  const { result, assumptions, filters, packages } = ctx;
+  const rate =
+    assumptions.megaDealerSubscriptionCommission +
+    assumptions.posSubscriptionCommission;
+
+  if (page === 'partners') {
+    const partners = filterPartners(result.allPartners, filters);
+    return {
+      sheetName: 'Partner Performance',
+      rows: [
+        [
+          'Partner',
+          'Type',
+          'DStv',
+          'GOtv',
+          'Matched',
+          'Hardware Sales Value',
+          'Qualifies',
+          'Estimated Incentive',
+        ],
+        ...partners.map((p) => [
+          p.partner,
+          p.partnerType,
+          p.dstvUnits,
+          p.gotvUnits,
+          p.matchedUnits,
+          p.knownHardwareSalesValue,
+          p.qualifies ? 'Yes' : 'No',
+          p.estimatedIncentive,
+        ]),
+      ],
+    };
+  }
+
+  if (page === 'subscriptions' || page === 'revenue') {
+    const rows = packageAnalytics(
+      filterPackages(packages, filters.brand, filters.packageId, filters.search),
+      rate,
+    );
+    return {
+      sheetName: 'Subscription Packages',
+      rows: [
+        ['Brand', 'Package', 'Volume', 'Revenue', 'Rate Card', 'Share', 'Commission'],
+        ...rows.map((p) => [
+          p.brand,
+          p.name,
+          p.salesVolume,
+          p.revenue,
+          p.rateCard,
+          p.revenueShare,
+          p.commission,
+        ]),
+      ],
+    };
+  }
+
+  if (page === 'pnl' || page === 'costs' || page === 'dashboard') {
+    return {
+      sheetName: 'P&L',
+      rows: [
+        ['Line Item', 'Amount'],
+        ['Total Revenue', result.baseRevenue],
+        ['Hardware Revenue', result.totalHardwareRevenue],
+        ['Subscription Revenue', result.subscriptionRevenue],
+        ['Hardware Commission', result.hardwareCommission],
+        ['Subscription Commission', result.subscriptionCommission],
+        ['Performance Incentive', result.performanceIncentive],
+        ['New POS Incentive', result.newPosIncentiveCost],
+        ['Stock Collection Fee', result.stockCollectionFee],
+        ['Base Profit', result.baseProfit],
+        ['Mega Dealer Incentive', result.megaDealerRenewableIncentive],
+        ['Profit After Incentive', result.profitAfterIncentive],
+      ],
+    };
+  }
+
+  return {
+    sheetName: 'Current View',
+    rows: [
+      ['Metric', 'Value'],
+      ['Period', ctx.periodLabel],
+      ['Brand Filter', filters.brand],
+      ['Total Revenue', result.baseRevenue],
+      ['Profit After Incentive', result.profitAfterIncentive],
+      ['Margin After Incentive', result.profitMarginAfterIncentive],
+    ],
+  };
 }
 
 function PageRouter({ page }: { page: PageId }) {
@@ -231,7 +379,7 @@ function Modal({
   confirmLabel: string;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1626]/50 p-4 print:hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1626]/50 p-4 print:hidden export-hide">
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
         <h3 className="text-lg font-bold text-[#12263f]">{title}</h3>
         <div className="mt-3">{children}</div>

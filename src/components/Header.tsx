@@ -1,5 +1,4 @@
 import {
-  Download,
   Maximize2,
   Menu,
   Minimize2,
@@ -8,12 +7,14 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { DataStatus } from '../types';
+import { ExportMenu, type ExportAction } from './ExportMenu';
 
 interface HeaderProps {
   onMenu: () => void;
   onReset: () => void;
   onSave: () => void;
-  onExport: () => void;
+  onExportAction: (action: ExportAction) => void | Promise<void>;
+  exportBusy?: boolean;
   onRefresh: () => void;
   onTogglePresentation: () => void;
   presentationMode: boolean;
@@ -30,7 +31,8 @@ export function Header({
   onMenu,
   onReset,
   onSave,
-  onExport,
+  onExportAction,
+  exportBusy,
   onRefresh,
   onTogglePresentation,
   presentationMode,
@@ -67,7 +69,7 @@ export function Header({
           {!presentationMode && (
             <button
               type="button"
-              className="mt-1 rounded-lg border border-slate-200 p-2 text-[#12263f] lg:hidden print:hidden"
+              className="mt-1 rounded-lg border border-slate-200 p-2 text-[#12263f] lg:hidden print:hidden export-hide"
               onClick={onMenu}
               aria-label="Open navigation"
             >
@@ -82,7 +84,7 @@ export function Header({
               Sales Analytics & P&L Intelligence
             </h2>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <label className="text-xs text-slate-500">
+              <label className="text-xs text-slate-500 export-hide">
                 Reporting Period
                 <select
                   className="ml-2 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-[#12263f]"
@@ -105,14 +107,14 @@ export function Header({
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
+        <div className="flex flex-wrap items-center gap-2 print:hidden export-hide">
           <ActionButton
             icon={RefreshCw}
             label="Refresh"
             onClick={onRefresh}
             spinning={refreshing}
           />
-          <ActionButton icon={Download} label="Export" onClick={onExport} />
+          <ExportMenu onAction={onExportAction} busy={exportBusy} />
           <ActionButton
             icon={presentationMode ? Minimize2 : Maximize2}
             label={presentationMode ? 'Exit Present' : 'Presentation'}
