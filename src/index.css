@@ -1,0 +1,65 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'IBM Plex Sans', 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-navy-50: #eef3f8;
+  --color-navy-100: #d6e2ef;
+  --color-navy-800: #1a3354;
+  --color-navy-900: #12263f;
+  --color-navy-950: #0b1626;
+  --color-dashboard: #f3f6fa;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background:
+      radial-gradient(circle at top right, rgba(14, 165, 233, 0.07), transparent 28%),
+      radial-gradient(circle at 8% 18%, rgba(124, 58, 237, 0.04), transparent 22%),
+      #f3f6fa;
+    color: #12263f;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer utilities {
+  .bg-dashboard {
+    background: transparent;
+  }
+
+  .presentation-mode main {
+    max-width: 1400px;
+    margin-inline: auto;
+  }
+}
+
+@media print {
+  body {
+    background: white !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .recharts-wrapper {
+    font-size: 11px;
+  }
+}
